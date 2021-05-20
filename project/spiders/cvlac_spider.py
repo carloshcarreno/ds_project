@@ -8,15 +8,15 @@ from project.items import ResearcherItem
 class CvLACSpider(scrapy.Spider):
     
     name = 'cvlac_spider'
-    start_urls = []
-    #start_urls = ['http://scienti.colciencias.gov.co:8081/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0000541737']
+    #start_urls = []
+    start_urls = ['http://scienti.colciencias.gov.co:8081/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0000162701']
 
     allowed_domains = ['scienti.minciencias.gov.co']
 
-    def __init__(self):
-        script_dir = os.path.dirname(__file__)
-        with open(os.path.join(script_dir, "urls.txt"), "r") as f:
-            self.start_urls = f.readlines()
+    #def __init__(self):
+    #    script_dir = os.path.dirname(__file__)
+    #    with open(os.path.join(script_dir, "urls.txt"), "r") as f:
+    #        self.start_urls = f.readlines()
 
 
     def parse(self, response):
@@ -372,6 +372,8 @@ class CvLACSpider(scrapy.Spider):
                 book['type'] = '-'.join(''.join(tr1.xpath('.//text()').extract()).strip().split('-')[1:]).strip()
                 
                 book['authors'] = ', '.join([x.strip() for x in ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[0].strip().replace('\r\n', ' ').split(',')])
+                book['authors'] = [x.strip() for x in book['authors'].split(',')]             
+
                 book['title'] = ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[1].strip()
                 book['place'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[1:]).strip().split('\r\n')[0].strip()
                 book['isbn'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[1:]).strip().split('\r\n')[3].split(':')[-1].strip()
@@ -439,14 +441,14 @@ class CvLACSpider(scrapy.Spider):
                 proj['title'] = title_institution.split("\xa0")[0].strip()
                 proj['university'] = title_institution.split("\xa0")[-1].strip()
                 
-                student_role = re.sub(' +', ' ',proj_info.split(' Persona orientada:',1)[1].strip())
+                student_sub = re.sub(' +', ' ',proj_info.split('Persona(s) orientada(s):')[1].strip())
 
                 students = []
-                students = re.sub(' +', ' ',student_role.split(' Dirigió como:',1)[0].strip().split(',',1)[0]).strip().split(';')
+                students = re.sub(' +', ' ',student_sub.split('Tutor(es)/Cotutor(es)')[0].strip().split(' Asesor(es)')[0]).strip()
                 proj['students'] = students
 
-                role = re.sub(' +', ' ',student_role.split(' Dirigió como:',1)[1].strip().split(',',1)[0]).strip()
-                proj['role'] = role
+                role_sub = re.sub(' +', ' ',proj_info.split(' Dirigió como:')[1].strip()).split(',')[0].strip()
+                proj['role'] = role_sub
                 
                 projects.append(proj)
         
