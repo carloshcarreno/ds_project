@@ -8,15 +8,19 @@ from project.items import ResearcherItem
 class CvLACSpider(scrapy.Spider):
     
     name = 'cvlac_spider'
-    #start_urls = []
-    start_urls = ['http://scienti.colciencias.gov.co:8081/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0000162701']
+    start_urls = []
+    #start_urls = ['https://scienti.minciencias.gov.co/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001478655',
+    #                'http://scienti.colciencias.gov.co:8081/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001038397',
+    #                'http://scienti.colciencias.gov.co:8081/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0000919705',
+    #                'https://scienti.minciencias.gov.co/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001366840'
+    #                ]
 
     allowed_domains = ['scienti.minciencias.gov.co']
 
-    #def __init__(self):
-    #    script_dir = os.path.dirname(__file__)
-    #    with open(os.path.join(script_dir, "urls.txt"), "r") as f:
-    #        self.start_urls = f.readlines()
+    def __init__(self):
+        script_dir = os.path.dirname(__file__)
+        with open(os.path.join(script_dir, "urls.txt"), "r") as f:
+            self.start_urls = f.readlines()
 
 
     def parse(self, response):
@@ -57,7 +61,19 @@ class CvLACSpider(scrapy.Spider):
 
             yield res
 
-    
+
+    def remove_accents(self, text):
+
+        a,b = 'áéíóúüñÁÉÍÓÚÑ','aeiouunAEIOUN'
+        trans = str.maketrans(a,b)
+        return text.translate(trans)
+
+
+    def format_spaces_and_quotes(self, text):
+        text = text.replace("\r"," ").replace("\t"," ").replace("\n"," ").replace('"','').replace("'","").strip()    
+        return re.sub(' +', ' ', text)
+
+
     def personal_info(self, response):
 
         item = {}
@@ -93,14 +109,12 @@ class CvLACSpider(scrapy.Spider):
         gen_index = cols.index('Sexo') if 'Sexo' in cols else -1  
         gender = cols[gen_index+1] if gen_index >= 0 else "No indica"
         
-        
-
         try:
 
             item["cv_id"] = cv_id.strip()
             item["cv_url"] = url
-            item["name"] = name.strip()
-            item["citation_name"] = citation_name.strip()
+            item["name"] = self.remove_accents(name.strip().upper())
+            item["citation_name"] = self.remove_accents(citation_name.strip().upper())
             item["nationality"] = nationality.strip()
             item["gender"] = gender.strip()
             item["category"] = category.strip()
@@ -148,10 +162,10 @@ class CvLACSpider(scrapy.Spider):
             cols = tr.xpath('td[2]//text()').extract()
 
             try:
-                study['level'] = cols[0].strip()
-                study['institution'] = cols[1].strip()
-                study['title'] = cols[2].strip()
-                study['project'] = cols[4].strip()
+                study['level'] = self.format_spaces_and_quotes(cols[0])
+                study['institution'] = self.format_spaces_and_quotes(cols[1])
+                study['title'] = self.format_spaces_and_quotes(cols[2])
+                study['project'] = self.format_spaces_and_quotes(cols[4])
                 studies.append(study)
             except:
                 study["error"] = "Parsing error"
@@ -176,9 +190,9 @@ class CvLACSpider(scrapy.Spider):
             studies.append(study)
 
             try:
-                study['type'] = cols[0].strip()
-                study['institution'] = cols[1].strip()
-                study['title'] = cols[2].strip()
+                study['type'] = self.format_spaces_and_quotes(cols[0])
+                study['institution'] = self.format_spaces_and_quotes(cols[1])
+                study['title'] = self.format_spaces_and_quotes(cols[2])
         
                 studies.append(study)
             except:
@@ -205,7 +219,7 @@ class CvLACSpider(scrapy.Spider):
             
             try:
                 if company.strip() !="": 
-                    job['company'] = company
+                    job['company'] = self.format_spaces_and_quotes(company)
                     job['activity'] = tr.xpath('td[2]/*[@class="blueTitle"]//text()').extract()
                     jobs.append(job)
             except:
@@ -255,7 +269,8 @@ class CvLACSpider(scrapy.Spider):
             line = {}
 
             try:
-                line['name'] = ''.join(tr.xpath('td//text()').extract()).split(', Activa:',1)[0].strip()
+                name = ''.join(tr.xpath('td//text()').extract()).split(', Activa:',1)[0].strip()
+                line['name'] = self.format_spaces_and_quotes(name)
                 line['active'] = ''.join(tr.xpath('td//text()').extract()).split(':')[1].strip()
                 lines.append(line)
             except:
@@ -281,8 +296,8 @@ class CvLACSpider(scrapy.Spider):
 
             try:
                 nombre, empresa = resto.split(',', 1)
-                reconocimiento['name'] = nombre.strip()
-                reconocimiento['institution'] = empresa.strip()
+                reconocimiento['name'] = self.format_spaces_and_quotes(nombre)
+                reconocimiento['institution'] = self.format_spaces_and_quotes(empresa)
                 awards.append(reconocimiento)
             except:
                 reconocimiento["error"] = "Parsing error"
@@ -306,7 +321,8 @@ class CvLACSpider(scrapy.Spider):
             event = {}
 
             try:
-                event['name'] = event_info[0].split('Nombre del evento:')[1].strip()
+                name = event_info[0].split('Nombre del evento:')[1].strip()
+                event['name'] = self.format_spaces_and_quotes(name)
                 event['type'] = event_info[1].split('Tipo de evento:')[1].strip()
                 event['kind'] = event_info[2].split(u'\xc1mbito:')[1].strip()
                 event['presented'] = event_info[3].split('Realizado el:')[1].strip() + ' ' + event_info[4].strip()
@@ -334,10 +350,11 @@ class CvLACSpider(scrapy.Spider):
                 paper['type'] = ''.join(tr1.xpath('.//text()').extract()).strip().split('-')[1].strip()
                 paper['published'] = ''.join(tr1.xpath('.//text()').extract()).strip().split('-')[2].strip()
 
-                paper['title'] = ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].partition('"')[-1].strip().replace('\r\n', ' ')
-                
+                title = ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].partition('"')[-1].strip().replace('\r\n', ' ').replace('"','')
+                paper['title'] = self.format_spaces_and_quotes(title)
+
                 authors = ', '.join([x.strip() for x in ''.join(tr2.xpath('.//text()').extract()).strip().split('. En:')[0].partition('"')[0].strip().replace('\r\n', ' ').split(',') if x.strip()]) 
-                paper['authors'] = [x.strip() for x in authors.split(',')]             
+                paper['authors'] = [self.remove_accents(x.strip()) for x in authors.split(',')]             
                 paper['place'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split('. En:')[1:]).strip().split('\r\n')[0].strip()
                 paper['ident'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split('. En:')[1:]).strip().split('\r\n')[2].strip()
                 paper['institution'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split('. En:')[1:]).strip().split('\r\n')[3].split(':')[-1].strip()
@@ -371,10 +388,11 @@ class CvLACSpider(scrapy.Spider):
             try:
                 book['type'] = '-'.join(''.join(tr1.xpath('.//text()').extract()).strip().split('-')[1:]).strip()
                 
-                book['authors'] = ', '.join([x.strip() for x in ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[0].strip().replace('\r\n', ' ').split(',')])
+                book['authors'] = ', '.join([self.remove_accents(x.strip()) for x in ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[0].strip().replace('\r\n', ' ').split(',')])
                 book['authors'] = [x.strip() for x in book['authors'].split(',')]             
 
-                book['title'] = ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[1].strip()
+                title = ''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[0].rsplit(',',1)[1].strip()
+                book['title'] = self.format_spaces_and_quotes(title)
                 book['place'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[1:]).strip().split('\r\n')[0].strip()
                 book['isbn'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[1:]).strip().split('\r\n')[3].split(':')[-1].strip()
                 book['ed'] = ''.join(''.join(tr2.xpath('.//text()').extract()).strip().split(' En:')[1:]).strip().split('\r\n')[2].split(':')[-1].strip()
@@ -405,7 +423,7 @@ class CvLACSpider(scrapy.Spider):
                 soft_info = [x.strip() for x in ''.join(tr2.xpath('.//text()').extract()).strip().split(' Nombre comercial:')[0].rsplit(',',1)[0].strip().replace('\r\n', ' ').split(',')]
 
                 soft['authors'] = soft_info[:-1]
-                soft['name'] = soft_info[-1]
+                soft['name'] = self.format_spaces_and_quotes(soft_info[-1])
                 software.append(soft)
         
             except:
@@ -417,7 +435,7 @@ class CvLACSpider(scrapy.Spider):
 
 
     def academic_projects(self, response):
-
+    
         sel = Selector(response)          
         content = response.xpath("//td[a[@name='trabajos_dirigi']]").xpath('table//tr[1]/following-sibling::tr')
 
@@ -438,8 +456,8 @@ class CvLACSpider(scrapy.Spider):
                     title_institution = title_institution.split(',',1)[1].strip() 
 
 
-                proj['title'] = title_institution.split("\xa0")[0].strip()
-                proj['university'] = title_institution.split("\xa0")[-1].strip()
+                proj['title'] = self.format_spaces_and_quotes(title_institution.split("\xa0")[0])
+                proj['university'] = self.format_spaces_and_quotes(title_institution.split("\xa0")[-1])
                 
                 student_sub = re.sub(' +', ' ',proj_info.split('Persona(s) orientada(s):')[1].strip())
 
@@ -458,3 +476,6 @@ class CvLACSpider(scrapy.Spider):
 
 
         return projects
+
+
+
